@@ -1,0 +1,70 @@
+# Publishes to NuGet when a v* tag is pushed.
+#
+# No NuGet API key exists anywhere in this repository or its secrets. The
+# NuGet/login action exchanges this workflow's OIDC token for a short-lived key,
+# which nuget.org issues only if the token matches a trusted publishing policy
+# configured on the package. Nothing long-lived to leak or rotate.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: The tag must match the version being published
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PROJECT="$(grep -m1 '<Version>' src/MarginFuse/MarginFuse.csproj \
+            | sed -E 's/.*<Version>(.*)<\/Version>.*/\1/')"
+          if [ "$TAG" != "$PROJECT" ]; then
+            echo "tag v$TAG does not match MarginFuse.csproj $PROJECT"
+            exit 1
+          fi
+
+      - name: Build and test
+        run: |
+          dotnet build -c Release
+          dotnet test -c Release --no-build
+
+      - name: Conformance must pass before anything is published
+        run: |
+          dotnet build tools/ConformanceRunner/ConformanceRunner.csproj -c Release
+          npm --prefix contract/harness install
+          npm --prefix contract/harness run conformance dotnet
+
+      - name: Pack
+        run: dotnet pack src/MarginFuse/MarginFuse.csproj -c Release --no-build -o artifacts
+
+      - name: Exchange the OIDC token for a short-lived key
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: pemira
+
+      - name: Publish
+        run: |
+          dotnet nuget push 'artifacts/*.nupkg' \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key '${{ steps.login.outputs.NUGET_API_KEY }}' \
+            --skip-duplicate

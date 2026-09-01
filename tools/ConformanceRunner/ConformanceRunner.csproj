@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Runs on whatever runtime is installed, so a machine with only a newer
+         one can still drive the suite. -->
+    <RollForward>LatestMajor</RollForward>
+    <AssemblyName>conformance-runner</AssemblyName>
+    <RootNamespace>MarginFuse.Conformance</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MarginFuse/MarginFuse.csproj" />
+  </ItemGroup>
+
+</Project>

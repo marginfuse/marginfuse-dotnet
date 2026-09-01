@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net8.0 is LTS and reaches net8, net9 and net10 consumers. It also has
+         System.Text.Json in the box, which is what keeps this package free of
+         external dependencies: a library that pulls one in forces its version
+         on every application that references it. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <PackageId>MarginFuse</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Pemira Labs</Authors>
+    <Company>Pemira Labs</Company>
+    <Description>MarginFuse server-side SDK. AI profitability guardrails: connect revenue to per-request AI cost and stop loss-making requests before they run. Sends usage metadata only, never prompts or responses.</Description>
+    <PackageTags>ai;llm;cost;margin;profitability;stripe;openai;anthropic;openrouter</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://marginfuse.com</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/marginfuse/marginfuse-dotnet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

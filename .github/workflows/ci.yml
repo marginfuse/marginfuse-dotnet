@@ -1,0 +1,55 @@
+# Verifies the SDK against the shared contract. The library targets net8.0 and
+# the matrix runs it on every current runtime, because "targets net8.0" and
+# "works on net10" are different claims.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: dotnet ${{ matrix.dotnet }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet: ["8.0.x", "9.0.x", "10.0.x"]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            ${{ matrix.dotnet }}
+
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Tests, plus the shared gateway vectors
+        run: dotnet test -c Release --no-build
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Conformance
+        run: |
+          dotnet build tools/ConformanceRunner/ConformanceRunner.csproj -c Release
+          npm --prefix contract/harness install
+          npm --prefix contract/harness run conformance dotnet
+
+      - name: The package must pack
+        run: dotnet pack src/MarginFuse/MarginFuse.csproj -c Release --no-build -o artifacts

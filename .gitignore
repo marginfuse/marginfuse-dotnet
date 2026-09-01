@@ -1,0 +1,5 @@
+bin/
+obj/
+contract/harness/node_modules/
+*.nupkg
+*.snupkg
