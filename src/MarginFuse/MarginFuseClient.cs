@@ -41,7 +41,17 @@ public sealed record MarginFuseOptions
 public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
 {
     private const int TrackRetries = 3;
-    private const string UserAgent = "marginfuse-dotnet/0.1.0";
+    /// <summary>
+    /// The released version of this library, as sent in the user-agent.
+    /// </summary>
+    /// <remarks>
+    /// Checked against the assembly version by the test suite. A literal
+    /// nobody compares to anything drifts, which is how the Node SDK came to
+    /// ship two releases still reporting 0.1.0.
+    /// </remarks>
+    public const string Version = "0.1.0";
+
+    private const string UserAgent = "marginfuse-dotnet/" + Version;
 
     private static readonly JsonSerializerOptions Wire = new()
     {
