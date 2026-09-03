@@ -41,6 +41,13 @@ public sealed record MarginFuseOptions
 public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
 {
     private const int TrackRetries = 3;
+
+    /// <summary>
+    /// Identify waits longer than a decision does, and for the opposite reason:
+    /// a decision that is late must be abandoned so the request can proceed,
+    /// while an identity that is late is still worth recording.
+    /// </summary>
+    private static readonly TimeSpan IdentifyTimeout = TimeSpan.FromSeconds(5);
     /// <summary>
     /// The released version of this library, as sent in the user-agent.
     /// </summary>
@@ -49,7 +56,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
     /// nobody compares to anything drifts, which is how the Node SDK came to
     /// ship two releases still reporting 0.1.0.
     /// </remarks>
-    public const string Version = "0.1.0";
+    public const string Version = "0.2.0";
 
     private const string UserAgent = "marginfuse-dotnet/" + Version;
 
@@ -112,6 +119,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
         var body = new Dictionary<string, object?>
         {
             ["customerId"] = parameters.CustomerId,
+            ["plan"] = parameters.Plan,
             ["feature"] = parameters.Feature,
             ["provider"] = parameters.Provider,
             ["model"] = parameters.Model,
@@ -174,6 +182,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
         {
             ["eventId"] = parameters.EventId ?? $"evt_{Guid.NewGuid()}",
             ["customerId"] = parameters.CustomerId,
+            ["plan"] = parameters.Plan,
             ["feature"] = parameters.Feature,
             ["provider"] = parameters.Provider,
             ["model"] = parameters.Model,
@@ -239,6 +248,76 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
     {
         Track(parameters);
         await FlushAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Tells MarginFuse who a customer is and what plan they are on.
+    /// </summary>
+    /// <remarks>
+    /// <para><see cref="IdentifyParams.Plan"/> is the key of a plan you declared
+    /// in MarginFuse Settings. From its price MarginFuse derives the customer's
+    /// revenue per period, which is what makes margin per customer and margin
+    /// policies work with no revenue source connected. Those figures are
+    /// labeled as a declared price everywhere they appear, because nobody
+    /// confirmed collection.</para>
+    /// <para>Safe to call on every sign-in: sending the plan the customer is
+    /// already on changes nothing. Sending a different one ends the current
+    /// cycle at that moment and prorates what accrued.</para>
+    /// <para>Unlike <see cref="Track"/>, this awaits and reports failure,
+    /// because "I could not record what this customer pays" has no safe
+    /// default: a wrong plan is a wrong margin. It still never throws. The
+    /// failure comes back as <see cref="Identity.Ok"/> false with a reason, and
+    /// <see cref="MarginFuseOptions.OnError"/> is called.</para>
+    /// </remarks>
+    /// <param name="parameters">The customer, and the plan they are on.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>What is in force now, or why it could not be recorded.</returns>
+    public async Task<Identity> IdentifyAsync(
+        IdentifyParams parameters,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+
+        var body = new Dictionary<string, object?>
+        {
+            ["customerId"] = parameters.CustomerId,
+            ["plan"] = parameters.Plan,
+            ["clearPlan"] = parameters.ClearPlan ? true : null,
+            ["periodStart"] = parameters.PeriodStart?.UtcDateTime.ToString(
+                "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'",
+                System.Globalization.CultureInfo.InvariantCulture),
+            ["name"] = parameters.Name,
+            ["email"] = parameters.Email,
+            ["metadata"] = parameters.Metadata,
+        };
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(IdentifyTimeout);
+
+        try
+        {
+            using var response = await PostAsync("/v1/identify", body, timeout.Token)
+                .ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var text = await response.Content.ReadAsStringAsync(timeout.Token)
+                    .ConfigureAwait(false);
+                var message =
+                    $"identify: HTTP {(int)response.StatusCode} {text[..Math.Min(200, text.Length)]}";
+                Report(new HttpRequestException(message), "identify");
+                return new Identity { Ok = false, Error = message };
+            }
+
+            var identity = await response.Content
+                .ReadFromJsonAsync<Identity>(Wire, timeout.Token)
+                .ConfigureAwait(false);
+            return (identity ?? new Identity()) with { Ok = true };
+        }
+        catch (Exception e)
+        {
+            Report(e, "identify");
+            return new Identity { Ok = false, Error = e.Message };
+        }
     }
 
     /// <summary>Tells MarginFuse what your application did with a decision.</summary>
@@ -329,6 +408,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
             Track(new TrackParams
             {
                 CustomerId = parameters.CustomerId,
+                Plan = parameters.Plan,
                 Feature = parameters.Feature,
                 Provider = parameters.Provider,
                 Model = modelUsed,
@@ -346,6 +426,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
         Track(new TrackParams
         {
             CustomerId = parameters.CustomerId,
+            Plan = parameters.Plan,
             Feature = parameters.Feature,
             Provider = parameters.Provider,
             Model = modelUsed,

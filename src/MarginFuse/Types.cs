@@ -132,6 +132,17 @@ public sealed record DecideParams
     /// <summary>A stable feature key, such as "ai_chat".</summary>
     public string? Feature { get; init; }
 
+    /// <summary>
+    /// The key of a plan declared in MarginFuse Settings, when you know it here.
+    /// </summary>
+    /// <remarks>
+    /// A hint, not an assignment: a key that does not resolve is ignored rather
+    /// than failing the call, because a decision must never be lost to a plan
+    /// note. Use <see cref="MarginFuseClient.IdentifyAsync"/> when the
+    /// assignment itself has to be recorded.
+    /// </remarks>
+    public string? Plan { get; init; }
+
     /// <summary>Optional expected usage, for a better pre-request estimate.</summary>
     public Usage? ExpectedUsage { get; init; }
 }
@@ -160,6 +171,17 @@ public sealed record TrackParams
 
     /// <summary>A stable feature key, such as "ai_chat".</summary>
     public string? Feature { get; init; }
+
+    /// <summary>
+    /// The key of a plan declared in MarginFuse Settings, when you know it here.
+    /// </summary>
+    /// <remarks>
+    /// A hint, not an assignment: a key that does not resolve is ignored rather
+    /// than failing the event, because usage must never be lost to a plan note.
+    /// Use <see cref="MarginFuseClient.IdentifyAsync"/> when the assignment
+    /// itself has to be recorded.
+    /// </remarks>
+    public string? Plan { get; init; }
 
     /// <summary>The model originally asked for, when a downgrade changed it.</summary>
     public string? RequestedModel { get; init; }
@@ -208,6 +230,71 @@ public sealed record ProviderCall<T>
 
     /// <summary>What happened to the call.</summary>
     public Outcome Outcome { get; init; } = Outcome.Success;
+}
+
+/// <summary>
+/// Tells MarginFuse who a customer is and what plan they are on.
+/// </summary>
+/// <remarks>
+/// <see cref="Plan"/> is the key of a plan declared in MarginFuse Settings, not
+/// a Stripe price id. From its price MarginFuse derives the customer's revenue
+/// per period, which is what makes margin work with no revenue source
+/// connected.
+/// </remarks>
+public sealed record IdentifyParams
+{
+    /// <summary>Your id for the end customer, or their Stripe customer id.</summary>
+    public required string CustomerId { get; init; }
+
+    /// <summary>
+    /// The declared plan to put this customer on. Omit to leave the plan alone;
+    /// sending the plan they are already on changes nothing.
+    /// </summary>
+    public string? Plan { get; init; }
+
+    /// <summary>Takes the customer off declared plans. Cannot be combined with Plan.</summary>
+    public bool ClearPlan { get; init; }
+
+    /// <summary>When the current cycle started, if earlier than now.</summary>
+    public DateTimeOffset? PeriodStart { get; init; }
+
+    /// <summary>Display name shown in the MarginFuse dashboard.</summary>
+    public string? Name { get; init; }
+
+    /// <summary>Contact address shown in the MarginFuse dashboard.</summary>
+    public string? Email { get; init; }
+
+    /// <summary>Short labels segment policies can match on, such as tier=legacy.</summary>
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+}
+
+/// <summary>
+/// What MarginFuse recorded for a customer, or why it could not.
+/// </summary>
+/// <remarks>
+/// Unlike a decision, this reports failure rather than falling back: a wrong
+/// plan is a wrong margin, and "I could not record what this customer pays" has
+/// no safe default. Check <see cref="Ok"/>. It is still never thrown.
+/// </remarks>
+public sealed record Identity
+{
+    /// <summary>True when MarginFuse recorded the identity.</summary>
+    [JsonIgnore] public bool Ok { get; init; }
+
+    /// <summary>MarginFuse's id for this customer, stable across calls.</summary>
+    [JsonPropertyName("customerId")] public string? CustomerId { get; init; }
+
+    /// <summary>The declared plan now in force, or null when on none.</summary>
+    [JsonPropertyName("plan")] public string? Plan { get; init; }
+
+    /// <summary>Start of the current declared cycle, when there is one.</summary>
+    [JsonPropertyName("periodStart")] public string? PeriodStart { get; init; }
+
+    /// <summary>End of the current declared cycle, when there is one.</summary>
+    [JsonPropertyName("periodEnd")] public string? PeriodEnd { get; init; }
+
+    /// <summary>Why it failed. Null when <see cref="Ok"/> is true.</summary>
+    [JsonIgnore] public string? Error { get; init; }
 }
 
 /// <summary>What guard did.</summary>

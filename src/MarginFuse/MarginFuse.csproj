@@ -9,7 +9,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <PackageId>MarginFuse</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Pemira Labs</Authors>
     <Company>Pemira Labs</Company>
     <Description>MarginFuse server-side SDK. AI profitability guardrails: connect revenue to per-request AI cost and stop loss-making requests before they run. Sends usage metadata only, never prompts or responses.</Description>

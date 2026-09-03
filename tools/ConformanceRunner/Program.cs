@@ -50,6 +50,24 @@ try
                 AckFromWire(Str(p, "acknowledgment")!));
             break;
 
+        case "identify":
+        {
+            // The one call that reports failure instead of failing open: a
+            // wrong plan is a wrong margin, so the application must be able to
+            // see it.
+            var identity = await mf.IdentifyAsync(IdentifyFrom(p));
+            report["result"] = new JsonObject
+            {
+                ["ok"] = identity.Ok,
+                ["customerId"] = identity.CustomerId,
+                ["plan"] = identity.Plan,
+                ["periodStart"] = identity.PeriodStart,
+                ["periodEnd"] = identity.PeriodEnd,
+                ["error"] = identity.Error,
+            };
+            break;
+        }
+
         case "guard":
         {
             var providerSpec = scenario["provider"]?.AsObject();
@@ -124,6 +142,7 @@ static Usage UsageFrom(JsonObject? u) => new()
 static DecideParams DecideFrom(JsonObject p) => new()
 {
     CustomerId = Str(p, "customerId")!,
+    Plan = Str(p, "plan"),
     Provider = Str(p, "provider")!,
     Model = Str(p, "model")!,
     Feature = Str(p, "feature"),
@@ -133,6 +152,7 @@ static DecideParams DecideFrom(JsonObject p) => new()
 static TrackParams TrackFrom(JsonObject p) => new()
 {
     CustomerId = Str(p, "customerId")!,
+    Plan = Str(p, "plan"),
     Provider = Str(p, "provider")!,
     Model = Str(p, "model")!,
     EventId = Str(p, "eventId"),
@@ -148,6 +168,24 @@ static TrackParams TrackFrom(JsonObject p) => new()
         "timeout" => Outcome.Timeout,
         _ => Outcome.Success,
     },
+};
+
+static IdentifyParams IdentifyFrom(JsonObject p) => new()
+{
+    CustomerId = Str(p, "customerId")!,
+    Plan = Str(p, "plan"),
+    ClearPlan = p["clearPlan"]?.GetValue<bool>() ?? false,
+    PeriodStart = Str(p, "periodStart") is { } start
+        ? DateTimeOffset.Parse(
+            start,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind)
+        : null,
+    Name = Str(p, "name"),
+    Email = Str(p, "email"),
+    Metadata = p["metadata"] is JsonObject m
+        ? m.ToDictionary(kv => kv.Key, kv => kv.Value!.GetValue<string>())
+        : null,
 };
 
 static Acknowledgment AckFromWire(string wire) => wire switch

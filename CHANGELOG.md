@@ -4,6 +4,41 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0]
+
+### Added
+
+- `IdentifyAsync`: tell MarginFuse who a customer is and which plan they are on.
+
+  MarginFuse can now compute margin without a revenue source connected, from
+  plans you declare in Settings and a plan assigned per customer. This call is
+  how your application assigns that plan itself.
+
+  ```csharp
+  Identity id = await mf.IdentifyAsync(new IdentifyParams
+  {
+      CustomerId = "user_8x2m91",
+      Plan = "pro",
+      Name = "Acme Studio",
+  });
+  ```
+
+  `Plan` is the key of a plan declared in MarginFuse, not a Stripe price id.
+  Safe to call on every sign-in: sending the plan the customer is already on
+  changes nothing. `PeriodStart` backdates the cycle, `ClearPlan` ends it.
+
+  Unlike `Track`, this one reports failure instead of failing quietly. A wrong
+  plan is a wrong margin, and there is no safe default for "I could not record
+  what this customer pays". Check `Ok`; `OnError` is called too. It still never
+  throws into your code.
+
+- `Plan` on `TrackParams` and `DecideParams`, so a plan can ride along with
+  usage rather than needing its own call. There it is a hint: a key that does
+  not resolve is ignored rather than failing your event, because usage must
+  never be lost to a plan note.
+
+Both are additive. Existing code keeps working unchanged.
+
 ## [0.1.0]
 
 First release. `net8.0`, zero dependencies.
