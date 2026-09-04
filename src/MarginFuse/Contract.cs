@@ -14,5 +14,5 @@ public static class Contract
     /// same scenarios and the same vectors.
     /// See github.com/marginfuse/sdk-contract
     /// </remarks>
-    public const int Version = 1;
+    public const int Version = 2;
 }

@@ -4,6 +4,44 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+### Fixed
+
+- A downgrade that crosses vendors is reported against the vendor that actually
+  ran it. `guard()` already ran the model the server chose, but the usage event
+  still named the requested provider, so the call was priced from the wrong
+  catalog and the saving the downgrade exists to prove was computed against the
+  wrong basis. An `allow` is unchanged, because the decision already defaults
+  its provider to the requested one.
+- A downgrade whose provider call then fails is acknowledged as
+  `used_downgrade_model` rather than `proceeded_as_requested`. The cheaper model
+  did run; what failed came after. Reporting otherwise told reconciliation the
+  policy never applied, which skewed realized-savings attribution on the error
+  path.
+
+### Changed
+
+- Pinned contract v2, whose new scenarios cover both corrections above and add
+  a privacy check that hands the SDK content-bearing fields and scans the bytes
+  that actually leave the process.
+
+## [Unreleased]
+
+### Fixed
+
+- `GuardAsync` reported the provider you asked for rather than the one that ran.
+  A downgrade can cross vendors, so an OpenAI request answered with an Anthropic
+  model was priced from the wrong catalogue and attributed to the wrong vendor,
+  and the saving the downgrade exists to prove was measured against the wrong
+  basis. The provider now moves with the model, on the success path and the
+  error path alike. Nothing changes for a call that was not downgraded.
+
+- `GuardAsync` acknowledged `proceeded_as_requested` when a downgraded call then
+  failed at the provider, which claimed the downgrade had never been applied.
+  It now acknowledges `used_downgrade_model`, the same choice the success path
+  already made. Your own exception still propagates unchanged.
+
 ## [0.2.0]
 
 ### Added

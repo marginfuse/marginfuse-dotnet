@@ -56,7 +56,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
     /// nobody compares to anything drifts, which is how the Node SDK came to
     /// ship two releases still reporting 0.1.0.
     /// </remarks>
-    public const string Version = "0.2.0";
+    public const string Version = "0.3.0";
 
     private const string UserAgent = "marginfuse-dotnet/" + Version;
 
@@ -394,9 +394,23 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
             return new GuardOutcome<T> { Kind = GuardKind.TopupRequired, Decision = decision };
         }
 
+        // What actually ran, which a downgrade decides. The provider moves with
+        // the model because a downgrade may cross vendors: reporting the one
+        // that was asked for would price the call from the wrong catalogue and
+        // credit the saving against the wrong basis. Outside a downgrade the
+        // decision already carries the caller's own provider back.
         var modelUsed = decision.Action == DecisionAction.Downgrade
             ? decision.Model
             : parameters.Model;
+        var providerUsed = decision.Action == DecisionAction.Downgrade
+            ? decision.Provider
+            : parameters.Provider;
+
+        // The same either way the call ends: a downgrade whose provider call
+        // then failed still ran the cheaper model.
+        var applied = decision.Action == DecisionAction.Downgrade
+            ? Acknowledgment.UsedDowngradeModel
+            : Acknowledgment.ProceededAsRequested;
 
         ProviderCall<T> call;
         try
@@ -410,7 +424,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
                 CustomerId = parameters.CustomerId,
                 Plan = parameters.Plan,
                 Feature = parameters.Feature,
-                Provider = parameters.Provider,
+                Provider = providerUsed,
                 Model = modelUsed,
                 RequestedModel = parameters.Model,
                 Outcome = Outcome.ProviderError,
@@ -418,7 +432,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
             });
             if (decision.Id is not null)
             {
-                Acknowledge(decision.Id, Acknowledgment.ProceededAsRequested);
+                Acknowledge(decision.Id, applied);
             }
             throw;
         }
@@ -428,7 +442,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
             CustomerId = parameters.CustomerId,
             Plan = parameters.Plan,
             Feature = parameters.Feature,
-            Provider = parameters.Provider,
+            Provider = providerUsed,
             Model = modelUsed,
             RequestedModel = parameters.Model,
             Usage = call.Usage,
@@ -438,9 +452,7 @@ public sealed class MarginFuseClient : IAsyncDisposable, IDisposable
         });
         if (decision.Id is not null)
         {
-            Acknowledge(decision.Id, decision.Action == DecisionAction.Downgrade
-                ? Acknowledgment.UsedDowngradeModel
-                : Acknowledgment.ProceededAsRequested);
+            Acknowledge(decision.Id, applied);
         }
 
         return new GuardOutcome<T>
